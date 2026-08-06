@@ -32,7 +32,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v6
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
       - name: Install Node.js 22
         uses: actions/setup-node@v7
         with:
