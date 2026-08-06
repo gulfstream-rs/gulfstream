@@ -24,7 +24,7 @@ jobs:
     environment: crates-io
     steps:
       - name: Check out release source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Install Rust 1.97.1
         run: |
           rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
