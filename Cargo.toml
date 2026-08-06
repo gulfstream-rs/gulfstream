@@ -30,7 +30,7 @@ include = [
 anyhow = "=1.0.104"
 argon2 = { version = "=0.5.3", features = ["password-hash", "std"] }
 axum = { version = "=0.8.9", features = ["json", "multipart", "query", "tokio", "http1", "http2"] }
-base64 = "=0.22.1"
+base64 = "=0.23.0"
 chrono = { version = "=0.4.45", features = ["clock", "serde"] }
 futures-util = "=0.3.33"
 hex = "=0.4.3"
