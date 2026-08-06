@@ -1,0 +1,229 @@
+[server]
+bind = "0.0.0.0:8080"
+public_base_url = "http://localhost:8080"
+max_request_body_bytes = 10747904000
+max_in_flight_requests = 512
+shutdown_grace_seconds = 30
+cors_allowed_origins = ["http://localhost:8080"]
+cors_allow_credentials = true
+
+[routes]
+api = "/api"
+web = "/app"
+watch = "/watch"
+stream = "/stream"
+health_live = "/health/live"
+health_ready = "/health/ready"
+openapi = "/openapi.yaml"
+
+[api]
+default_page_size = 50
+maximum_page_size = 200
+
+[web]
+enabled = true
+template_path = "web/shell.html"
+assets_directory = "web/assets"
+assets_route = "/assets"
+site_name = "Gulfstream"
+tagline = "Upload, process, stream, and understand video."
+repository_url = "https://github.com/gulfstream-rs/gulfstream"
+documentation_url = "https://gulfstream-rs.github.io/gulfstream/"
+support_url = "https://github.com/gulfstream-rs/gulfstream/issues"
+date_locale = "en-US"
+time_zone = "UTC"
+brand_color = "#2563eb"
+dashboard_reporting_days = 30
+dashboard_refresh_seconds = 30
+jobs_refresh_seconds = 10
+page_size_options = [10, 25, 50, 100]
+cache_control = "no-cache, no-store, must-revalidate"
+
+[database]
+url = "sqlite://data/gulfstream.db?mode=rwc"
+max_connections = 16
+busy_timeout_ms = 10000
+journal_mode = "wal"
+synchronous = "normal"
+
+[storage]
+root = "data/storage"
+temporary_root = "data/tmp"
+original_directory_name = "original"
+stream_directory_name = "stream"
+trash_directory_name = "trash"
+preserve_deleted_media = false
+
+[streaming]
+player_cache_control = "private, no-store"
+token_redirect_cache_control = "private, no-store"
+playlist_cache_control = "no-cache, no-store, must-revalidate"
+segment_cache_control = "public, max-age=31536000, immutable"
+source_cache_control = "private, max-age=3600, no-transform"
+private_asset_cache_control = "private, no-store"
+enable_range_requests = true
+
+[registration]
+mode = "admin_token"
+admin_token = "${GULFSTREAM_ADMIN_TOKEN}"
+admin_header_name = "x-gulfstream-registration-token"
+default_storage_quota_bytes = 107374182400
+maximum_email_bytes = 254
+maximum_display_name_bytes = 160
+maximum_api_key_name_bytes = 120
+
+[browser_auth]
+password_pepper = "${GULFSTREAM_PASSWORD_PEPPER}"
+password_argon2_memory_kib = 19456
+password_argon2_iterations = 2
+password_argon2_parallelism = 1
+minimum_password_bytes = 12
+maximum_password_bytes = 1024
+session_signing_key = "${GULFSTREAM_SESSION_SIGNING_KEY}"
+session_ttl_seconds = 604800
+session_idle_timeout_seconds = 86400
+maximum_sessions_per_account = 10
+session_cookie_name = "gulfstream_auth"
+session_cookie_path = "/"
+session_cookie_secure = false
+session_cookie_http_only = true
+session_cookie_same_site = "lax"
+csrf_header_name = "x-gulfstream-csrf"
+maintenance_interval_seconds = 3600
+
+[security]
+api_key_prefix = "gfs"
+api_key_pepper = "${GULFSTREAM_API_KEY_PEPPER}"
+api_key_argon2_memory_kib = 19456
+api_key_argon2_iterations = 2
+api_key_argon2_parallelism = 1
+playback_signing_key = "${GULFSTREAM_PLAYBACK_SIGNING_KEY}"
+playback_token_ttl_seconds = 900
+
+[uploads]
+minimum_source_bytes = 1
+maximum_source_bytes = 10737418240
+maximum_text_field_bytes = 65536
+maximum_filename_bytes = 240
+default_filename = "upload"
+default_remote_filename = "remote-video"
+default_content_type = "application/octet-stream"
+default_visibility = "private"
+accepted_content_types = ["video/mp4", "video/quicktime", "video/x-matroska", "video/webm", "video/x-msvideo", "application/octet-stream"]
+
+[remote_imports]
+enabled = true
+allow_private_networks = false
+maximum_source_bytes = 10737418240
+request_timeout_seconds = 3600
+maximum_redirects = 5
+user_agent = "gulfstream"
+use_system_proxy = false
+
+[jobs]
+worker_count = 2
+poll_interval_ms = 750
+lease_seconds = 7200
+lease_renewal_interval_seconds = 60
+maximum_attempts = 3
+retry_base_delay_seconds = 30
+
+[transcoding]
+enabled = true
+ffmpeg_path = "/usr/bin/ffmpeg"
+ffprobe_path = "/usr/bin/ffprobe"
+command_timeout_seconds = 7200
+segment_duration_seconds = 6
+segment_format = "fmp4"
+hls_version = 7
+master_playlist_filename = "master.m3u8"
+variant_playlist_filename = "index.m3u8"
+fmp4_init_filename = "init.mp4"
+fmp4_segment_filename_pattern = "segment_%06d.m4s"
+mpegts_segment_filename_pattern = "segment_%06d.ts"
+hls_playlist_type = "vod"
+hls_flags = ["independent_segments", "temp_file"]
+scaling_flags = "lanczos"
+audio_sample_rate_hz = 48000
+audio_channels = 2
+ffmpeg_threads = 0
+retain_original = true
+allow_upscale = false
+extra_input_arguments = []
+extra_output_arguments = []
+
+[[transcoding.profiles]]
+name = "360p"
+maximum_height = 360
+video_codec = "libx264"
+video_bitrate_kbps = 800
+maximum_video_bitrate_kbps = 856
+video_buffer_kbps = 1200
+audio_codec = "aac"
+audio_bitrate_kbps = 96
+preset = "medium"
+profile = "main"
+pixel_format = "yuv420p"
+frame_rate = 30
+hls_video_codec = "avc1.4d401e"
+hls_audio_codec = "mp4a.40.2"
+
+[[transcoding.profiles]]
+name = "720p"
+maximum_height = 720
+video_codec = "libx264"
+video_bitrate_kbps = 2800
+maximum_video_bitrate_kbps = 2996
+video_buffer_kbps = 4200
+audio_codec = "aac"
+audio_bitrate_kbps = 128
+preset = "medium"
+profile = "high"
+pixel_format = "yuv420p"
+frame_rate = 30
+hls_video_codec = "avc1.64001f"
+hls_audio_codec = "mp4a.40.2"
+
+[[transcoding.profiles]]
+name = "1080p"
+maximum_height = 1080
+video_codec = "libx264"
+video_bitrate_kbps = 5000
+maximum_video_bitrate_kbps = 5350
+video_buffer_kbps = 7500
+audio_codec = "aac"
+audio_bitrate_kbps = 192
+preset = "medium"
+profile = "high"
+pixel_format = "yuv420p"
+frame_rate = 30
+hls_video_codec = "avc1.640028"
+hls_audio_codec = "mp4a.40.2"
+
+[analytics]
+enabled = true
+viewer_hash_key = "${GULFSTREAM_VIEWER_HASH_KEY}"
+visitor_cookie_name = "gulfstream_visitor"
+visitor_cookie_path = "/"
+playback_cookie_name = "gulfstream_playback"
+playback_session_cookie_name = "gulfstream_playback_session"
+playback_session_cookie_path = "/"
+cookie_secure = false
+cookie_same_site = "lax"
+visitor_cookie_max_age_seconds = 31536000
+heartbeat_interval_seconds = 10
+maximum_heartbeat_delta_ms = 30000
+default_reporting_days = 30
+maximum_reporting_days = 366
+raw_event_retention_days = 90
+playback_session_retention_days = 90
+maintenance_interval_seconds = 3600
+record_byte_events = false
+
+[player]
+template_path = "templates/player.html"
+hls_javascript_url = "https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"
+
+[observability]
+log_filter = "gulfstream=info,tower_http=info"
+json_logs = false

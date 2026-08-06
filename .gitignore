@@ -1,0 +1,14 @@
+node_modules
+dist
+cache
+/target
+/data
+/.env
+/config/gulfstream.toml
+/video.mp4
+.DS_Store
+*.db
+*.db-shm
+*.db-wal
+*.zip
+*.tar.gz

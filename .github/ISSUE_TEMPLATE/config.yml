@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/gulfstream-rs/gulfstream/security/advisories/new
+    about: Report vulnerabilities privately.
+  - name: Documentation
+    url: https://gulfstream-rs.github.io/gulfstream/
+    about: Read setup, API, processing, and operations guidance.

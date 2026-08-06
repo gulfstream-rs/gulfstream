@@ -1,0 +1,39 @@
+name: Bug report
+description: Report a reproducible Gulfstream defect
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide the smallest reproducible sequence, sanitized configuration, and relevant logs.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Gulfstream version
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      description: Operating system, architecture, container runtime, and FFmpeg version.
+    validations:
+      required: true
+  - type: checkboxes
+    id: security
+    attributes:
+      label: Security
+      options:
+        - label: This report does not disclose a security vulnerability or secret.
+          required: true

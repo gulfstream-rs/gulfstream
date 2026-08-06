@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{{TAGLINE}}">
+  <meta name="color-scheme" content="light dark">
+  <title>{{PAGE_TITLE}} · {{SITE_NAME}}</title>
+  <link rel="stylesheet" href="{{ASSET_BASE}}/styles/tokens.css">
+  <link rel="stylesheet" href="{{ASSET_BASE}}/styles/base.css">
+  <link rel="stylesheet" href="{{ASSET_BASE}}/styles/layout.css">
+  <link rel="stylesheet" href="{{ASSET_BASE}}/styles/components.css">
+  <link rel="stylesheet" href="{{ASSET_BASE}}/styles/pages.css">
+</head>
+<body>
+  <a class="skip-link" href="#app">Skip to content</a>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Primary navigation">
+      <div class="brand-block">
+        <a class="brand" data-route="dashboard" href="#">{{SITE_NAME}}</a>
+        <p class="tagline">{{TAGLINE}}</p>
+      </div>
+      <nav class="primary-nav">
+        <a data-route="dashboard" data-page="dashboard" href="#"><span aria-hidden="true">⌂</span>Dashboard</a>
+        <a data-route="upload" data-page="upload" href="#"><span aria-hidden="true">↑</span>Upload</a>
+        <a data-route="media" data-page="media media_detail" href="#"><span aria-hidden="true">▣</span>Media</a>
+        <a data-route="jobs" data-page="jobs" href="#"><span aria-hidden="true">↻</span>Processing</a>
+        <a data-route="analytics" data-page="analytics" href="#"><span aria-hidden="true">⌁</span>Analytics</a>
+        <a data-route="account" data-page="account" href="#"><span aria-hidden="true">◎</span>Account</a>
+      </nav>
+      <div class="sidebar-links">
+        <a data-link="documentation" href="#">Documentation</a>
+        <a data-link="repository" href="#">Repository</a>
+        <a data-link="support" href="#" hidden>Support</a>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <button class="icon-button mobile-nav-toggle" type="button" aria-controls="sidebar" aria-expanded="false" data-sidebar-toggle>
+          <span class="sr-only">Toggle navigation</span>
+          <span aria-hidden="true">☰</span>
+        </button>
+        <div class="topbar-title">
+          <span class="eyebrow">{{SITE_NAME}}</span>
+          <strong data-page-title>{{PAGE_TITLE}}</strong>
+        </div>
+        <a class="button button-primary topbar-action" data-route="upload" href="#">Upload video</a>
+      </header>
+
+      <main id="app" tabindex="-1" aria-busy="true">
+        <div class="page-loading" role="status" aria-live="polite">
+          <span class="spinner" aria-hidden="true"></span>
+          <span>Loading…</span>
+        </div>
+      </main>
+
+      <footer class="site-footer">
+        <span>{{SITE_NAME}}</span>
+        <span>API-driven video management</span>
+      </footer>
+    </div>
+  </div>
+
+  <dialog id="confirm-dialog" class="dialog">
+    <form method="dialog">
+      <h2 data-dialog-title>Confirm action</h2>
+      <p data-dialog-message></p>
+      <div class="actions actions-end">
+        <button value="cancel" class="button">Cancel</button>
+        <button value="confirm" class="button button-danger">Confirm</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <div id="live-region" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+  <script>
+    window.GULFSTREAM_PAGE = {{PAGE_ID_JSON}};
+    window.GULFSTREAM_CONFIG = {{RUNTIME_CONFIG_JSON}};
+  </script>
+  <script type="module" src="{{ASSET_BASE}}/app.js"></script>
+</body>
+</html>

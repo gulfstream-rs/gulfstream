@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>{{TITLE}}</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; background: #0b1020; color: #f7f8fc; }
+    main { max-width: 1120px; margin: 0 auto; padding: 24px; }
+    video { width: 100%; max-height: 78vh; background: #000; border-radius: 12px; }
+    h1 { margin-bottom: 0.35rem; }
+    p { color: #c2c9dc; white-space: pre-wrap; }
+  </style>
+  {{HLS_SCRIPT}}
+</head>
+<body>
+<main>
+  <video id="player" controls playsinline preload="metadata"></video>
+  <h1>{{TITLE}}</h1>
+  <p>{{DESCRIPTION}}</p>
+</main>
+<script>
+(() => {
+  if (window.location.search) {
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+  const video = document.getElementById('player');
+  const source = {{STREAM_URL_JSON}};
+  const eventUrl = {{EVENT_URL_JSON}};
+  const heartbeatMs = {{HEARTBEAT_MILLISECONDS}};
+  let lastPositionMs = 0;
+  let lastHeartbeatAt = Date.now();
+
+  const sourceMode = {{SOURCE_MODE_JSON}};
+  if (sourceMode === 'file') {
+    video.src = source;
+  } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    video.src = source;
+  } else if (window.Hls && window.Hls.isSupported()) {
+    const hls = new window.Hls();
+    hls.loadSource(source);
+    hls.attachMedia(video);
+  } else {
+    document.body.insertAdjacentHTML('beforeend', '<p>This browser cannot play HLS.</p>');
+  }
+
+  const send = (kind, deltaMs = 0) => {
+    const positionMs = Math.max(0, Math.round(video.currentTime * 1000));
+    const body = JSON.stringify({ kind, position_ms: positionMs, watched_delta_ms: deltaMs });
+    if (navigator.sendBeacon && kind === 'ended') {
+      navigator.sendBeacon(eventUrl, new Blob([body], { type: 'application/json' }));
+      return;
+    }
+    fetch(eventUrl, { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body, keepalive: true }).catch(() => {});
+  };
+
+  const measuredDelta = () => {
+    const now = Date.now();
+    const positionMs = Math.max(0, Math.round(video.currentTime * 1000));
+    const progressed = Math.max(0, positionMs - lastPositionMs);
+    const elapsed = Math.max(0, now - lastHeartbeatAt);
+    lastPositionMs = positionMs;
+    lastHeartbeatAt = now;
+    return Math.min(progressed, elapsed);
+  };
+
+  video.addEventListener('play', () => {
+    lastPositionMs = Math.max(0, Math.round(video.currentTime * 1000));
+    lastHeartbeatAt = Date.now();
+    send('play');
+  });
+  video.addEventListener('pause', () => send('pause', measuredDelta()));
+  video.addEventListener('seeking', () => {
+    lastPositionMs = Math.max(0, Math.round(video.currentTime * 1000));
+    lastHeartbeatAt = Date.now();
+    send('seek');
+  });
+  video.addEventListener('ended', () => send('ended', measuredDelta()));
+
+  setInterval(() => {
+    if (video.paused || video.ended) return;
+    send('heartbeat', measuredDelta());
+  }, heartbeatMs);
+})();
+</script>
+</body>
+</html>

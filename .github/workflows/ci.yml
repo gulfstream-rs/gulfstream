@@ -1,0 +1,65 @@
+name: Continuous integration
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
+  RUSTDOCFLAGS: -Dwarnings
+
+jobs:
+  web:
+    name: Web and documentation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+      - name: Install Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Validate dashboard assets
+        run: node scripts/validate-web.mjs
+      - name: Install exact documentation dependency
+        working-directory: docs
+        run: npm ci --no-audit --no-fund
+      - name: Build VitePress
+        working-directory: docs
+        run: npm run docs:build
+
+  rust:
+    name: Rust quality gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+      - name: Install Rust 1.97.1
+        run: |
+          rustup toolchain install 1.97.1 --profile minimal --component rustfmt,clippy
+          rustup default 1.97.1
+      - name: Verify metadata
+        run: cargo metadata --no-deps --format-version 1
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Check all targets
+        run: cargo check --all-targets --all-features
+      - name: Lint all targets
+        run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Test all targets
+        run: cargo test --all-targets --all-features
+      - name: Build Rustdoc
+        run: cargo doc --no-deps --all-features
+      - name: Build release binary
+        run: cargo build --release
+      - name: Verify crates.io package
+        run: cargo publish --dry-run

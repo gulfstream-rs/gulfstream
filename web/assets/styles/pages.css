@@ -1,0 +1,23 @@
+.status-breakdown { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+.quick-actions { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); }
+.quick-action { display: grid; gap: var(--space-2); min-height: 7rem; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); color: var(--text); text-decoration: none; }
+.quick-action:hover { border-color: var(--brand); box-shadow: var(--shadow-sm); }
+.quick-action span { color: var(--text-muted); font-size: .82rem; }
+.detail-list { display: grid; grid-template-columns: minmax(8rem, .35fr) 1fr; margin: 0; }
+.detail-list dt, .detail-list dd { padding: .62rem 0; border-bottom: 1px solid var(--border); }
+.detail-list dt { color: var(--text-muted); font-size: .82rem; font-weight: 700; }
+.detail-list dd { margin: 0; overflow-wrap: anywhere; }
+.key-display { display: grid; gap: var(--space-2); padding: var(--space-4); border: 1px solid color-mix(in srgb, var(--success) 45%, var(--border)); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--success) 8%, var(--surface-raised)); }
+.key-display code { display: block; padding: .65rem; border-radius: var(--radius-sm); background: var(--surface-inset); user-select: all; }
+.processing-error { max-width: 32rem; color: var(--danger); font-size: .82rem; overflow-wrap: anywhere; }
+@media (max-width: 42rem) {
+  .table-wrap { border: 0; background: transparent; overflow: visible; }
+  table, thead, tbody, tr, th, td { display: block; }
+  thead { position: absolute; left: -9999px; }
+  tbody { display: grid; gap: var(--space-3); }
+  tbody tr { padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-raised); }
+  td { display: grid; grid-template-columns: 7.5rem 1fr; gap: var(--space-2); padding: .42rem 0; border: 0; }
+  td::before { content: attr(data-label); color: var(--text-muted); font-size: .75rem; font-weight: 700; text-transform: uppercase; }
+  .detail-list { grid-template-columns: 1fr; }
+  .detail-list dt { padding-bottom: 0; border-bottom: 0; }
+}
