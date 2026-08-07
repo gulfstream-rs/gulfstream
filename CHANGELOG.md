@@ -2,6 +2,11 @@
 
 All notable changes to Gulfstream are documented here. Releases follow Semantic Versioning.
 
+## 4.0.1 — 2026-08-08
+
+- Updated `base64` to 0.23.0 and `toml` to 1.1.4+spec-1.1.0.
+- Updated GitHub Actions: `actions/checkout` to v7, `actions/configure-pages` to v6, `actions/deploy-pages` to v5, and `docker/login-action` to v4.6.0.
+
 ## 4.0.0 — 2026-08-06
 
 - Reorganized backend code into private domain, application, infrastructure, HTTP, worker, presentation, and runtime boundaries.
