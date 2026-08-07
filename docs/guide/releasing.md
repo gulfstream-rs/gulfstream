@@ -9,9 +9,9 @@ A release maintainer needs:
 - write access to `gulfstream-rs/gulfstream`;
 - permission to create GitHub releases;
 - owner access to the `gulfstream` package on crates.io;
-- a protected GitHub environment named `crates-io`.
+- a GitHub Actions secret `CARGO_REGISTRY_TOKEN` in the repository or the `crates-io` environment containing a crates.io API token with `publish-update` (and `publish-new` for the first publication) permission.
 
-The first crate version must be published manually because crates.io can only attach a trusted publisher after the package exists. Perform that bootstrap from a clean checkout after all release checks pass:
+Because crates.io only attaches tokens to a package after it exists, the first crate version must be published manually from a clean checkout after all release checks pass:
 
 ```bash
 cargo login
@@ -19,14 +19,7 @@ cargo publish --dry-run
 cargo publish
 ```
 
-After the package exists, configure its crates.io trusted publisher with:
-
-- repository owner: `gulfstream-rs`;
-- repository name: `gulfstream`;
-- workflow filename: `publish-crates.yml`;
-- GitHub environment: `crates-io`.
-
-Remove any obsolete crates.io token secrets from the repository. The automated workflow exchanges GitHub's OIDC identity for a short-lived publication token only during an eligible release job.
+After the package exists, store that same token in the `CARGO_REGISTRY_TOKEN` secret used by `publish-crates.yml`. The automated workflow posts the package with this token during an eligible release job. Revoking or rotating the token only affects new releases.
 
 ## Prepare a release
 

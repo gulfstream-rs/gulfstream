@@ -184,11 +184,11 @@ Contributor workflow and review expectations are documented in [CONTRIBUTING.md]
 
 - `ci.yml` validates web assets, formats, checks, lints, tests, builds Rustdoc and release artifacts, performs a crates.io dry run, and builds VitePress.
 - `docs.yml` publishes VitePress and generated Rustdoc to GitHub Pages from `main`.
-- `publish-crates.yml` validates a published GitHub release tag and publishes the matching package to crates.io with short-lived OIDC credentials from crates.io trusted publishing.
+- `publish-crates.yml` validates a published GitHub release tag and publishes the matching package to crates.io using the `CARGO_REGISTRY_TOKEN` secret.
 - `security.yml` enforces license, source, ban, and advisory policy with cargo-deny.
 - Dependabot checks Cargo, npm, and GitHub Actions dependencies weekly.
 
-Before enabling documentation deployment, select **GitHub Actions** as the Pages source. Before automated crates.io releases, complete the one-time package bootstrap described in the [release guide](docs/guide/releasing.md), create the `crates-io` GitHub environment, and configure the corresponding crates.io trusted publisher. No long-lived registry token is stored in GitHub.
+Before enabling documentation deployment, select **GitHub Actions** as the Pages source. Before automated crates.io releases, complete the one-time package bootstrap described in the [release guide](docs/guide/releasing.md) and store the crates.io token in the repository's `CARGO_REGISTRY_TOKEN` secret (or the `crates-io` environment).
 
 ## Storage and database
 
