@@ -45,7 +45,7 @@ cargo publish --dry-run
 6. Tag the exact release commit using the package version:
 
 ```bash
-git tag -s v4.0.0 -m "Gulfstream 4.0.0"
+git tag v4.0.0 -m "Gulfstream 4.0.0"
 git push origin v4.0.0
 ```
 
