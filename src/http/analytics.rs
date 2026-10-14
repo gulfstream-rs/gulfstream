@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     application::analytics,
-    domain::analytics::{AnalyticsPoint, AnalyticsTotals},
+    domain::analytics::{AnalyticsPoint, AnalyticsTotals, CountryStats},
     error::AppError,
     state::AppState,
 };
@@ -37,13 +37,41 @@ pub struct AnalyticsTimeSeries {
     pub points: Vec<AnalyticsPoint>,
 }
 
-pub async fn summary(
+#[derive(Debug, Serialize)]
+pub struct AnalyticsCountries {
+    pub from: NaiveDate,
+    pub to: NaiveDate,
+    pub media_id: Option<String>,
+    /// Whether a country source (database or CDN header) is configured.
+    pub geolocation_enabled: bool,
+    pub countries: Vec<CountryStats>,
+}
+
+pub async fn countries(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(query): Query<AnalyticsQuery>,
-) -> Result<Json<AnalyticsSummary>, AppError> {
-    let authenticated = state.auth.authenticate(&headers).await?;
-    if let Some(media_id) = query.media_id.as_deref() {
+) -> Result<Json<AnalyticsCountries>, AppError> {
+    let account_id = authorize(&state, &headers, query.media_id.as_deref()).await?;
+    let range = analytics::reporting_range(&state, query.from, query.to, query.media_id)?;
+    let countries = analytics::countries(&state, &account_id, &range).await?;
+    Ok(Json(AnalyticsCountries {
+        from: range.from,
+        to: range.to,
+        media_id: range.media_id,
+        geolocation_enabled: state.geolocation.is_enabled(),
+        countries,
+    }))
+}
+
+/// Authenticates the caller and checks ownership of the filtered media.
+async fn authorize(
+    state: &AppState,
+    headers: &HeaderMap,
+    media_id: Option<&str>,
+) -> Result<String, AppError> {
+    let authenticated = state.auth.authenticate(headers).await?;
+    if let Some(media_id) = media_id {
         crate::application::media::assert_account_owns_media(
             &state.pool,
             &authenticated.account_id,
@@ -51,8 +79,17 @@ pub async fn summary(
         )
         .await?;
     }
+    Ok(authenticated.account_id)
+}
+
+pub async fn summary(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<AnalyticsQuery>,
+) -> Result<Json<AnalyticsSummary>, AppError> {
+    let account_id = authorize(&state, &headers, query.media_id.as_deref()).await?;
     let range = analytics::reporting_range(&state, query.from, query.to, query.media_id)?;
-    let totals = analytics::totals(&state, &authenticated.account_id, &range).await?;
+    let totals = analytics::totals(&state, &account_id, &range).await?;
     Ok(Json(AnalyticsSummary {
         from: range.from,
         to: range.to,
@@ -66,17 +103,9 @@ pub async fn time_series(
     headers: HeaderMap,
     Query(query): Query<AnalyticsQuery>,
 ) -> Result<Json<AnalyticsTimeSeries>, AppError> {
-    let authenticated = state.auth.authenticate(&headers).await?;
-    if let Some(media_id) = query.media_id.as_deref() {
-        crate::application::media::assert_account_owns_media(
-            &state.pool,
-            &authenticated.account_id,
-            media_id,
-        )
-        .await?;
-    }
+    let account_id = authorize(&state, &headers, query.media_id.as_deref()).await?;
     let range = analytics::reporting_range(&state, query.from, query.to, query.media_id)?;
-    let points = analytics::time_series(&state, &authenticated.account_id, &range).await?;
+    let points = analytics::time_series(&state, &account_id, &range).await?;
     Ok(Json(AnalyticsTimeSeries {
         from: range.from,
         to: range.to,

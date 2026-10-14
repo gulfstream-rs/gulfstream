@@ -1,5 +1,6 @@
 pub mod accounts;
 pub mod analytics;
+pub(crate) mod client;
 pub mod dashboard;
 pub mod health;
 pub mod jobs;
@@ -9,5 +10,6 @@ pub(crate) mod pagination;
 pub mod playback;
 pub mod router;
 pub mod sessions;
+pub(crate) mod template;
 pub mod uploads;
 pub mod web;

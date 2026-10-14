@@ -264,7 +264,7 @@ paths:
                 jobs_by_status: [{status: succeeded, count: 8}, {status: running, count: 2}]
                 analytics_from: '2026-07-08'
                 analytics_to: '2026-08-06'
-                analytics: {views: 1024, unique_viewers: 741, play_starts: 1002, completed_views: 620, watch_time_ms: 48200000, bytes_served: 95563022336}
+                analytics: {views: 1024, unique_viewers: 741, play_starts: 1002, completed_views: 620, watch_time_ms: 48200000, bytes_served: 95563022336, qualified_views: 512}
         '401': {$ref: '#/components/responses/Unauthorized'}
   '{{API_ROUTE}}/media':
     get:
@@ -494,7 +494,7 @@ paths:
                 from: '2026-08-01'
                 to: '2026-08-06'
                 media_id: null
-                totals: {views: 127, unique_viewers: 95, play_starts: 120, completed_views: 84, watch_time_ms: 6200000, bytes_served: 1843200000}
+                totals: {views: 127, unique_viewers: 95, play_starts: 120, completed_views: 84, watch_time_ms: 6200000, bytes_served: 1843200000, qualified_views: 66}
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '404': {$ref: '#/components/responses/NotFound'}
@@ -519,8 +519,40 @@ paths:
                 to: '2026-08-06'
                 media_id: null
                 points:
-                  - {day: '2026-08-05', views: 52, unique_viewers: 41, play_starts: 50, completed_views: 32, watch_time_ms: 2800000, bytes_served: 840000000}
-                  - {day: '2026-08-06', views: 75, unique_viewers: 54, play_starts: 70, completed_views: 52, watch_time_ms: 3400000, bytes_served: 1003200000}
+                  - {day: '2026-08-05', views: 52, unique_viewers: 41, play_starts: 50, completed_views: 32, watch_time_ms: 2800000, bytes_served: 840000000, qualified_views: 27}
+                  - {day: '2026-08-06', views: 75, unique_viewers: 54, play_starts: 70, completed_views: 52, watch_time_ms: 3400000, bytes_served: 1003200000, qualified_views: 39}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '404': {$ref: '#/components/responses/NotFound'}
+  '{{API_ROUTE}}/analytics/countries':
+    get:
+      tags: [Analytics]
+      operationId: analyticsCountries
+      summary: Get views, qualified views and watch time by viewer country
+      description: >-
+        Countries are resolved when playback starts, from a trusted CDN header
+        (`geolocation.country_header`) or a local MaxMind DB country database
+        (`geolocation.database_path`). Only the ISO 3166-1 alpha-2 code is kept;
+        `ZZ` means unknown. Sorted by views, most viewed first.
+      security: [{bearerAuth: []}, {cookieAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/FromDate'}
+        - {$ref: '#/components/parameters/ToDate'}
+        - {$ref: '#/components/parameters/OptionalMediaId'}
+      responses:
+        '200':
+          description: Country breakdown for the range.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AnalyticsCountries'}
+              example:
+                from: '2026-08-05'
+                to: '2026-08-06'
+                media_id: null
+                geolocation_enabled: true
+                countries:
+                  - {country_code: US, views: 61, qualified_views: 40, watch_time_ms: 3100000}
+                  - {country_code: DE, views: 33, qualified_views: 20, watch_time_ms: 1700000}
         '400': {$ref: '#/components/responses/BadRequest'}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '404': {$ref: '#/components/responses/NotFound'}
@@ -529,13 +561,22 @@ paths:
       tags: [Playback]
       operationId: recordPlaybackEvent
       summary: Record a player event for the active playback session
-      description: Called by the generated player. The session identifier must match the playback-session cookie.
-      security: [{playbackSessionCookie: []}]
+      description: >-
+        Called by the generated player. Authorized by the playback-session cookie
+        or by the `signature` issued with the player page (third-party embeds,
+        where browsers withhold cookies). Watch time is capped by wall-clock time
+        between events and by playback progress.
+      security: [{playbackSessionCookie: []}, {}]
       parameters:
         - name: session_id
           in: path
           required: true
           schema: {type: string, format: uuid}
+        - name: signature
+          in: query
+          required: false
+          description: Session signature embedded in the player page.
+          schema: {type: string}
       requestBody:
         required: true
         content:
@@ -561,15 +602,64 @@ paths:
           required: false
           description: Short-lived signed token used to redeem private playback cookies.
           schema: {type: string}
+        - name: t
+          in: query
+          required: false
+          description: Start offset, for example `90`, `1m30s` or `1:30`. Alias `start`.
+          schema: {type: string}
       responses:
         '200':
-          description: Player HTML.
+          description: Player HTML. Framing is limited to this site (`frame-ancestors 'self'`); use the embed route on other sites.
           content:
             text/html: {schema: {type: string}}
         '303': {description: Private token redeemed; redirect removes the token from the browser address bar.}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '404': {$ref: '#/components/responses/NotFound'}
         '409': {$ref: '#/components/responses/Conflict'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  '{{EMBED_ROUTE}}/{media_id}':
+    get:
+      tags: [Playback]
+      operationId: embedMedia
+      summary: Open the chromeless player for iframe embedding
+      description: >-
+        Public and unlisted media only. Framing is controlled by
+        `embed.allowed_origins` (`Content-Security-Policy: frame-ancestors`).
+        The embedded page posts `gulfstream:event` messages to its parent and
+        accepts `gulfstream:command` messages (play, pause, mute, unmute, seek).
+      parameters:
+        - {$ref: '#/components/parameters/MediaId'}
+        - {name: autoplay, in: query, required: false, description: 'Start automatically (muted unless `muted=0`).', schema: {type: string, enum: ['1', '0', 'true', 'false']}}
+        - {name: muted, in: query, required: false, schema: {type: string, enum: ['1', '0', 'true', 'false']}}
+        - {name: loop, in: query, required: false, schema: {type: string, enum: ['1', '0', 'true', 'false']}}
+        - {name: start, in: query, required: false, description: 'Start offset such as `90`, `1m30s` or `1:30`. Alias `t`.', schema: {type: string}}
+      responses:
+        '200':
+          description: Embeddable player HTML.
+          content:
+            text/html: {schema: {type: string}}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
+  '{{OEMBED_ROUTE}}':
+    get:
+      tags: [Playback]
+      operationId: oembed
+      summary: oEmbed provider for watch and embed links
+      parameters:
+        - {name: url, in: query, required: true, description: Watch or embed URL on this server., schema: {type: string, format: uri}}
+        - {name: format, in: query, required: false, schema: {type: string, enum: [json]}}
+        - {name: maxwidth, in: query, required: false, schema: {type: integer, minimum: 1}}
+        - {name: maxheight, in: query, required: false, schema: {type: integer, minimum: 1}}
+      responses:
+        '200':
+          description: oEmbed 1.0 video response.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OembedResponse'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '501': {description: Unsupported format (only JSON is provided).}
   '{{STREAM_ROUTE}}/{media_id}/master.m3u8':
     get:
       tags: [Playback]
@@ -583,6 +673,8 @@ paths:
             application/vnd.apple.mpegurl: {schema: {type: string}}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '404': {$ref: '#/components/responses/NotFound'}
+        '403': {description: Cross-site request blocked by hotlink protection.}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
   '{{STREAM_ROUTE}}/{media_id}/source':
     get:
       tags: [Playback]
@@ -599,6 +691,8 @@ paths:
         '206': {description: Partial source response.}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '404': {$ref: '#/components/responses/NotFound'}
+        '403': {description: Cross-site request blocked by hotlink protection.}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
         '416': {description: Range cannot be satisfied.}
   '{{STREAM_ROUTE}}/{media_id}/{variant}/{asset}':
     get:
@@ -614,6 +708,8 @@ paths:
         '206': {description: Partial asset response when enabled.}
         '401': {$ref: '#/components/responses/Unauthorized'}
         '404': {$ref: '#/components/responses/NotFound'}
+        '403': {description: Cross-site request blocked by hotlink protection.}
+        '429': {$ref: '#/components/responses/TooManyRequests'}
 components:
   securitySchemes:
     bearerAuth:
@@ -672,6 +768,13 @@ components:
     BadRequest: {$ref: '#/components/responses/Error400'}
     Unauthorized: {$ref: '#/components/responses/Error401'}
     Forbidden: {$ref: '#/components/responses/Error403'}
+    TooManyRequests:
+      description: Per-client rate or concurrency limit reached. Retry after the `Retry-After` seconds.
+      headers:
+        Retry-After: {schema: {type: integer, minimum: 1}}
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/ErrorResponse'}
     NotFound: {$ref: '#/components/responses/Error404'}
     Conflict: {$ref: '#/components/responses/Error409'}
     PayloadTooLarge: {$ref: '#/components/responses/Error413'}
@@ -867,7 +970,7 @@ components:
       properties: {status: {type: string}, count: {type: integer, format: int64}}
     AnalyticsTotals:
       type: object
-      required: [views, unique_viewers, play_starts, completed_views, watch_time_ms, bytes_served]
+      required: [views, unique_viewers, play_starts, completed_views, watch_time_ms, bytes_served, qualified_views]
       properties:
         views: {type: integer, format: int64}
         unique_viewers: {type: integer, format: int64}
@@ -875,6 +978,14 @@ components:
         completed_views: {type: integer, format: int64}
         watch_time_ms: {type: integer, format: int64}
         bytes_served: {type: integer, format: int64}
+        qualified_views:
+          type: integer
+          format: int64
+          description: >-
+            Views whose server-measured watch time reached
+            `analytics.qualified_view_seconds` (or the configured fraction of
+            shorter videos), counted once per viewer, media and day. Intended as
+            the billable unit for monetization.
     AnalyticsPoint:
       allOf:
         - {$ref: '#/components/schemas/AnalyticsTotals'}
@@ -897,6 +1008,35 @@ components:
         to: {type: string, format: date}
         media_id: {type: [string, 'null'], format: uuid}
         points: {type: array, items: {$ref: '#/components/schemas/AnalyticsPoint'}}
+    CountryStats:
+      type: object
+      required: [country_code, views, qualified_views, watch_time_ms]
+      properties:
+        country_code: {type: string, pattern: '^[A-Z]{2}$', description: ISO 3166-1 alpha-2; ZZ when unknown.}
+        views: {type: integer, format: int64}
+        qualified_views: {type: integer, format: int64}
+        watch_time_ms: {type: integer, format: int64}
+    AnalyticsCountries:
+      type: object
+      required: [from, to, geolocation_enabled, countries]
+      properties:
+        from: {type: string, format: date}
+        to: {type: string, format: date}
+        media_id: {type: [string, 'null'], format: uuid}
+        geolocation_enabled: {type: boolean}
+        countries: {type: array, items: {$ref: '#/components/schemas/CountryStats'}}
+    OembedResponse:
+      type: object
+      required: [version, type, title, provider_name, provider_url, width, height, html]
+      properties:
+        version: {type: string, const: '1.0'}
+        type: {type: string, const: video}
+        title: {type: string}
+        provider_name: {type: string}
+        provider_url: {type: string, format: uri}
+        width: {type: integer}
+        height: {type: integer}
+        html: {type: string}
     Dashboard:
       type: object
       required: [account, media_total, media_by_status, jobs_total, jobs_by_status, analytics_from, analytics_to, analytics]

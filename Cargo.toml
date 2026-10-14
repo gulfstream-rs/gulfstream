@@ -1,6 +1,6 @@
 [package]
 name = "gulfstream"
-version = "4.0.1"
+version = "5.0.0"
 edition = "2024"
 rust-version = "1.97"
 description = "Configurable video ingestion, adaptive streaming, account management, web administration, and analytics server"
@@ -35,6 +35,7 @@ chrono = { version = "=0.4.45", features = ["clock", "serde"] }
 futures-util = "=0.3.33"
 hex = "=0.4.3"
 hmac = "=0.13.0"
+maxminddb = "=0.32.0"
 reqwest = { version = "=0.13.4", default-features = false, features = ["rustls", "stream"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
@@ -46,13 +47,14 @@ tokio = { version = "=1.53.1", features = ["full"] }
 tokio-util = { version = "=0.7.19", features = ["io", "rt"] }
 toml = "=1.1.4"
 tower = { version = "=0.5.3", features = ["limit", "util"] }
-tower-http = { version = "=0.7.0", features = ["catch-panic", "compression-full", "cors", "fs", "limit", "trace"] }
+tower-http = { version = "=0.7.0", features = ["catch-panic", "compression-full", "cors", "fs", "limit", "set-header", "trace"] }
 tracing = "=0.1.44"
 tracing-subscriber = { version = "=0.3.23", features = ["env-filter", "fmt", "json"] }
 uuid = { version = "=1.24.0", features = ["v4", "serde"] }
 
 [dev-dependencies]
 tempfile = "=3.27.0"
+tokio = { version = "=1.53.1", features = ["full", "test-util"] }
 
 [lints.rust]
 unsafe_code = "forbid"

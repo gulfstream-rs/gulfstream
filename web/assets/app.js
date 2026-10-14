@@ -1,5 +1,6 @@
-import { initializeShell, page } from './core/config.js';
-import { showFatal } from './core/ui.js';
+import { page } from './core/config.js';
+import { initializeShell } from './core/shell.js';
+import { showFatal } from './components/feedback.js';
 import { renderAccount } from './pages/account.js';
 import { renderAnalytics } from './pages/analytics.js';
 import { renderDashboard } from './pages/dashboard.js';

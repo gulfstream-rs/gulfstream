@@ -9,7 +9,9 @@ use crate::{
     auth::AuthService,
     config::Config,
     http,
-    infrastructure::{database, storage::Storage},
+    infrastructure::{
+        database, geolocation::Geolocation, protection::Protection, storage::Storage,
+    },
     state::AppState,
     workers,
 };
@@ -31,7 +33,9 @@ pub async fn run(config: Config) -> anyhow::Result<()> {
 
     tracing::info!(%bind, "gulfstream started");
     let cancellation = state.cancellation.clone();
-    let server = axum::serve(listener, app).with_graceful_shutdown(async move {
+    // Peer addresses feed per-client rate limits and geolocation.
+    let service = app.into_make_service_with_connect_info::<std::net::SocketAddr>();
+    let server = axum::serve(listener, service).with_graceful_shutdown(async move {
         shutdown_signal().await;
         cancellation.cancel();
     });
@@ -71,6 +75,8 @@ async fn build_state(config: Config) -> anyhow::Result<AppState> {
     } else {
         String::new()
     };
+    let geolocation = Geolocation::load(&config.geolocation)?;
+    let protection = Protection::new(config.protection.clone());
     let auth = AuthService::new(
         pool.clone(),
         config.security.clone(),
@@ -85,6 +91,8 @@ async fn build_state(config: Config) -> anyhow::Result<AppState> {
         cancellation: CancellationToken::new(),
         player_template: Arc::new(player_template),
         web_template: Arc::new(web_template),
+        protection,
+        geolocation: Arc::new(geolocation),
     })
 }
 
@@ -128,7 +136,7 @@ async fn shutdown_signal() {
 }
 
 fn validate_player_template(template: &str) -> anyhow::Result<()> {
-    const PLACEHOLDERS: [&str; 8] = [
+    const PLACEHOLDERS: [&str; 12] = [
         "{{TITLE}}",
         "{{DESCRIPTION}}",
         "{{HLS_SCRIPT}}",
@@ -136,6 +144,10 @@ fn validate_player_template(template: &str) -> anyhow::Result<()> {
         "{{EVENT_URL_JSON}}",
         "{{SOURCE_MODE_JSON}}",
         "{{HEARTBEAT_MILLISECONDS}}",
+        "{{FALLBACK_URL_JSON}}",
+        "{{SITE_NAME}}",
+        "{{PLAYER_OPTIONS_JSON}}",
+        "{{HEAD_LINKS}}",
         "<video",
     ];
     for placeholder in PLACEHOLDERS {

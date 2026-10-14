@@ -11,6 +11,7 @@ use tower_http::{
     cors::{AllowOrigin, Any, CorsLayer},
     limit::RequestBodyLimitLayer,
     services::ServeDir,
+    set_header::SetResponseHeaderLayer,
     trace::TraceLayer,
 };
 
@@ -57,12 +58,14 @@ pub fn build(state: AppState) -> anyhow::Result<Router> {
         .route("/jobs", get(jobs::list))
         .route("/analytics/summary", get(analytics::summary))
         .route("/analytics/time-series", get(analytics::time_series))
+        .route("/analytics/countries", get(analytics::countries))
         .route(
             "/playback/{session_id}/events",
             post(playback::playback_event),
         );
 
     let watch = Router::new().route("/{media_id}", get(playback::watch));
+    let embed = Router::new().route("/{media_id}", get(playback::embed));
     let stream = Router::new()
         .route("/{media_id}/master.m3u8", get(playback::master_playlist))
         .route("/{media_id}/source", get(playback::source))
@@ -77,7 +80,9 @@ pub fn build(state: AppState) -> anyhow::Result<Router> {
         .route(&state.config.routes.health_ready, get(health::ready))
         .route(&state.config.routes.openapi, get(openapi::serve))
         .nest(&state.config.routes.api, api)
+        .route(&state.config.routes.oembed, get(playback::oembed))
         .nest(&state.config.routes.watch, watch)
+        .nest(&state.config.routes.embed, embed)
         .nest(&state.config.routes.stream, stream);
 
     if state.config.web.enabled {
@@ -93,7 +98,16 @@ pub fn build(state: AppState) -> anyhow::Result<Router> {
             .route("/account", get(web::account))
             .nest_service(
                 &state.config.web.assets_route,
-                ServeDir::new(&state.config.web.assets_directory),
+                // Module scripts import each other by unversioned URL; without
+                // an explicit policy browsers cache them heuristically and can
+                // mix stale and fresh modules after an upgrade. `no-cache`
+                // keeps conditional requests (304) cheap but always current.
+                tower::ServiceBuilder::new()
+                    .layer(SetResponseHeaderLayer::if_not_present(
+                        header::CACHE_CONTROL,
+                        HeaderValue::from_static("no-cache"),
+                    ))
+                    .service(ServeDir::new(&state.config.web.assets_directory)),
             );
         app = app.nest(&state.config.routes.web, web_app);
     }

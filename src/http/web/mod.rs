@@ -6,7 +6,11 @@ use axum::{
     response::{Html, IntoResponse, Response},
 };
 
-use crate::{error::AppError, state::AppState};
+use crate::{
+    error::AppError,
+    http::template::{html_escape, script_json, substitute},
+    state::AppState,
+};
 
 pub async fn root(State(state): State<AppState>) -> Result<Response, AppError> {
     let destination = if state.config.web.enabled {
@@ -40,23 +44,27 @@ fn render(state: &AppState, title: &str, page_id: &str) -> Result<Response, AppE
         return Err(AppError::NotFound("web interface is disabled".to_owned()));
     }
 
-    let runtime_json = serde_json::to_string(&runtime::build(state)).map_err(AppError::internal)?;
-    let page_id_json = serde_json::to_string(page_id).map_err(AppError::internal)?;
+    let runtime_json = script_json(&runtime::build(state))?;
+    let page_id_json = script_json(page_id)?;
     let asset_base = format!(
         "{}{}",
         state.config.routes.web, state.config.web.assets_route
     );
-    let html = state
-        .web_template
-        .replace("{{PAGE_TITLE}}", &html_escape(title))
-        .replace("{{PAGE_ID_JSON}}", &page_id_json)
-        .replace("{{SITE_NAME}}", &html_escape(&state.config.web.site_name))
-        .replace("{{TAGLINE}}", &html_escape(&state.config.web.tagline))
-        .replace("{{ASSET_BASE}}", &html_escape(&asset_base))
-        .replace(
-            "{{RUNTIME_CONFIG_JSON}}",
-            &runtime_json.replace('<', "\\u003c"),
-        );
+    let page_title = html_escape(title);
+    let site_name = html_escape(&state.config.web.site_name);
+    let tagline = html_escape(&state.config.web.tagline);
+    let asset_base = html_escape(&asset_base);
+    let html = substitute(
+        &state.web_template,
+        &[
+            ("{{PAGE_TITLE}}", &page_title),
+            ("{{PAGE_ID_JSON}}", &page_id_json),
+            ("{{SITE_NAME}}", &site_name),
+            ("{{TAGLINE}}", &tagline),
+            ("{{ASSET_BASE}}", &asset_base),
+            ("{{RUNTIME_CONFIG_JSON}}", &runtime_json),
+        ],
+    );
 
     let mut response = Html(html).into_response();
     response.headers_mut().insert(
@@ -80,13 +88,4 @@ fn redirect(location: &str) -> Result<Response, AppError> {
             .map_err(AppError::internal)?,
     );
     Ok(response)
-}
-
-fn html_escape(value: &str) -> String {
-    value
-        .replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#39;")
 }

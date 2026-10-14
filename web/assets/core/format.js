@@ -53,6 +53,19 @@ export function formatDuration(milliseconds) {
   return [hours, minutes, seconds].map((part) => String(part).padStart(2, '0')).join(':');
 }
 
+/** Human-friendly duration for headline figures: "2h 05m", "3m 20s", "45s". */
+export function formatWatchTime(milliseconds) {
+  const numeric = Number(milliseconds);
+  if (!Number.isFinite(numeric) || numeric < 0) return '—';
+  const totalSeconds = Math.round(numeric / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${formatNumber(hours)}h ${String(minutes).padStart(2, '0')}m`;
+  if (minutes > 0) return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
+  return `${seconds}s`;
+}
+
 export function formatDate(value) {
   if (!value) return '—';
   const date = new Date(value);

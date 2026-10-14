@@ -36,6 +36,8 @@ impl Config {
             (&self.routes.health_live, "routes.health_live"),
             (&self.routes.health_ready, "routes.health_ready"),
             (&self.routes.openapi, "routes.openapi"),
+            (&self.routes.embed, "routes.embed"),
+            (&self.routes.oembed, "routes.oembed"),
         ];
         let mut routes = HashSet::new();
         for (value, field) in route_values {
@@ -246,6 +248,16 @@ impl Config {
         {
             bail!("analytics.cookie_secure must be true when SameSite is none");
         }
+        if self.analytics.qualified_view_seconds == 0
+            || !(self.analytics.qualified_view_minimum_fraction > 0.0
+                && self.analytics.qualified_view_minimum_fraction <= 1.0)
+        {
+            bail!(
+                "analytics.qualified_view_seconds must be positive and \
+                 analytics.qualified_view_minimum_fraction must be in (0, 1]"
+            );
+        }
+        self.validate_protection()?;
 
         if self.uploads.minimum_source_bytes == 0
             || self.uploads.maximum_source_bytes == 0
@@ -423,6 +435,53 @@ impl Config {
 
         if let Some(url) = self.player.hls_javascript_url.as_deref() {
             validate_absolute_http_url(url, "player.hls_javascript_url")?;
+        }
+        Ok(())
+    }
+
+    fn validate_protection(&self) -> anyhow::Result<()> {
+        let protection = &self.protection;
+        if let Some(header) = protection.client_ip_header.as_deref() {
+            header
+                .parse::<axum::http::HeaderName>()
+                .context("protection.client_ip_header must be a valid header name")?;
+        }
+        if protection.stream_requests_per_second > 0
+            && protection.stream_request_burst < protection.stream_requests_per_second
+        {
+            bail!("protection.stream_request_burst must be at least stream_requests_per_second");
+        }
+        if protection.maximum_tracked_clients == 0 {
+            bail!("protection.maximum_tracked_clients must be positive");
+        }
+        if let Some(header) = self.geolocation.country_header.as_deref() {
+            header
+                .parse::<axum::http::HeaderName>()
+                .context("geolocation.country_header must be a valid header name")?;
+        }
+        if self.embed.enabled {
+            if self.embed.allowed_origins.is_empty() {
+                bail!("embed.allowed_origins must list at least one origin or \"*\"");
+            }
+            for origin in &self.embed.allowed_origins {
+                if origin != "*" {
+                    let parsed = reqwest::Url::parse(origin)
+                        .context("embed.allowed_origins entries must be absolute origins")?;
+                    if !matches!(parsed.scheme(), "http" | "https")
+                        || parsed.host_str().is_none()
+                        || parsed.path() != "/"
+                        || origin.ends_with('/')
+                    {
+                        bail!(
+                            "embed.allowed_origins entries must be origins such as \
+                             https://example.com (scheme and host, no path)"
+                        );
+                    }
+                }
+            }
+            if self.embed.default_width < 160 || self.embed.default_height < 90 {
+                bail!("embed default dimensions must be at least 160x90");
+            }
         }
         Ok(())
     }

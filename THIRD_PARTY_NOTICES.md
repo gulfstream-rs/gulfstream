@@ -2,6 +2,10 @@
 
 The Gulfstream source code is licensed under the MIT License. The published container image also includes separately licensed third-party software.
 
+## Geolocation databases
+
+Gulfstream does not ship a geolocation database. When `geolocation.database_path` points to a third-party database, its license applies: DB-IP IP to Country Lite is licensed under CC BY 4.0 and requires attribution ("IP Geolocation by DB-IP", <https://db-ip.com>); MaxMind GeoLite2 is subject to the GeoLite2 End User License Agreement; IPinfo Lite is licensed under CC BY-SA 4.0.
+
 ## FFmpeg and FFprobe
 
 The container copies the `ffmpeg` and `ffprobe` binaries from the pinned multi-architecture image `mwader/static-ffmpeg:7.1.1`. That build enables GPL and version 3 components, including libx264, and reports GPL version 3 or later licensing terms.

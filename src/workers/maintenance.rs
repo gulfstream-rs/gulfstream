@@ -62,6 +62,13 @@ async fn clean_analytics(state: &AppState) -> anyhow::Result<()> {
             .execute(&mut *transaction)
             .await?;
     }
+    // Qualified-view de-duplication only needs the current day; keep one
+    // extra day so events around midnight UTC still de-duplicate.
+    let cutoff_day = (now - ChronoDuration::days(2)).date_naive().to_string();
+    sqlx::query("DELETE FROM daily_qualified_viewers WHERE day < ?")
+        .bind(cutoff_day)
+        .execute(&mut *transaction)
+        .await?;
     transaction.commit().await?;
     Ok(())
 }

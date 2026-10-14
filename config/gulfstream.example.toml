@@ -15,6 +15,8 @@ stream = "/stream"
 health_live = "/health/live"
 health_ready = "/health/ready"
 openapi = "/openapi.yaml"
+embed = "/embed"
+oembed = "/oembed"
 
 [api]
 default_page_size = 50
@@ -219,6 +221,10 @@ raw_event_retention_days = 90
 playback_session_retention_days = 90
 maintenance_interval_seconds = 3600
 record_byte_events = false
+# A view becomes "qualified" (the monetizable unit) after this much
+# server-measured watch time, or after this fraction of shorter videos.
+qualified_view_seconds = 30
+qualified_view_minimum_fraction = 0.5
 
 [player]
 template_path = "templates/player.html"
@@ -227,3 +233,45 @@ hls_javascript_url = "https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"
 [observability]
 log_filter = "gulfstream=info,tower_http=info"
 json_logs = false
+
+# Playback abuse and bandwidth protection. Limits are per client address
+# (IPv6 grouped by /64) and per process; 0 disables a limit.
+[protection]
+# Set only behind a trusted reverse proxy/CDN, e.g. "x-forwarded-for" or
+# "cf-connecting-ip"; otherwise clients could spoof their address.
+# client_ip_header = "x-forwarded-for"
+stream_requests_per_second = 30
+stream_request_burst = 300
+sessions_per_minute = 60
+max_concurrent_streams_per_client = 16
+# Pace HLS segments and the original file after an initial burst so a single
+# client cannot saturate the uplink (bytes per second, 0 = unlimited).
+# Keep segment pacing well above the top rendition bitrate (4x is a good start)
+# or adaptive bitrate selection will step down.
+segment_bytes_per_second = 0
+segment_burst_bytes = 0
+source_bytes_per_second = 2500000
+source_burst_bytes = 16000000
+# Total egress cap shared by all stream responses (0 = unlimited).
+global_bytes_per_second = 0
+# Reject browser media requests initiated by other sites (hotlinking).
+block_cross_site_requests = true
+# Serve the original upload to viewers when HLS renditions exist.
+expose_original_with_hls = false
+maximum_tracked_clients = 100000
+
+[embed]
+enabled = true
+# Sites allowed to frame the embed player, e.g. ["https://blog.example.com"].
+allowed_origins = ["*"]
+default_width = 640
+default_height = 360
+
+[geolocation]
+# Free country databases in MaxMind DB format (monthly updates):
+#   DB-IP IP-to-Country Lite (CC BY 4.0, no account):
+#     https://db-ip.com/db/download/ip-to-country-lite
+#   MaxMind GeoLite2 Country (free account + EULA), IPinfo Lite (CC BY-SA 4.0).
+# database_path = "data/geo/dbip-country-lite.mmdb"
+# Trusted CDN header with the country code; takes precedence when present.
+# country_header = "cf-ipcountry"

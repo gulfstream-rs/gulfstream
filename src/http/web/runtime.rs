@@ -16,7 +16,15 @@ pub(super) struct RuntimeConfig {
     features: FeatureConfig,
     limits: LimitConfig,
     options: OptionConfig,
+    embed: EmbedUiConfig,
     csrf_header_name: String,
+}
+
+#[derive(Debug, Serialize)]
+struct EmbedUiConfig {
+    enabled: bool,
+    default_width: u32,
+    default_height: u32,
 }
 
 #[derive(Debug, Serialize)]
@@ -52,6 +60,8 @@ struct UiRoutes {
     jobs: String,
     analytics: String,
     account: String,
+    watch: String,
+    embed: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -72,6 +82,7 @@ struct ApiEndpoints {
     dashboard: String,
     analytics_summary: String,
     analytics_time_series: String,
+    analytics_countries: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -85,6 +96,8 @@ struct FeatureConfig {
     remote_imports: bool,
     transcoding: bool,
     analytics: bool,
+    geolocation: bool,
+    qualified_view_seconds: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -136,6 +149,8 @@ pub(super) fn build(state: &AppState) -> RuntimeConfig {
             jobs: format!("{web}/jobs"),
             analytics: format!("{web}/analytics"),
             account: format!("{web}/account"),
+            watch: state.config.routes.watch.clone(),
+            embed: state.config.routes.embed.clone(),
         },
         api: ApiEndpoints {
             accounts: format!("{api}/accounts"),
@@ -154,6 +169,7 @@ pub(super) fn build(state: &AppState) -> RuntimeConfig {
             dashboard: format!("{api}/dashboard"),
             analytics_summary: format!("{api}/analytics/summary"),
             analytics_time_series: format!("{api}/analytics/time-series"),
+            analytics_countries: format!("{api}/analytics/countries"),
         },
         registration: RegistrationUiConfig {
             mode: state.config.registration.mode.as_str().to_owned(),
@@ -163,6 +179,8 @@ pub(super) fn build(state: &AppState) -> RuntimeConfig {
             remote_imports: state.config.remote_imports.enabled,
             transcoding: state.config.transcoding.enabled,
             analytics: state.config.analytics.enabled,
+            geolocation: state.geolocation.is_enabled(),
+            qualified_view_seconds: state.config.analytics.qualified_view_seconds,
         },
         limits: LimitConfig {
             maximum_upload_bytes: state.config.uploads.maximum_source_bytes,
@@ -178,6 +196,11 @@ pub(super) fn build(state: &AppState) -> RuntimeConfig {
             media_visibilities: Visibility::ALL,
             job_statuses: JobStatus::ALL,
             job_kinds: JobKind::ALL,
+        },
+        embed: EmbedUiConfig {
+            enabled: state.config.embed.enabled,
+            default_width: state.config.embed.default_width,
+            default_height: state.config.embed.default_height,
         },
         csrf_header_name: state.config.browser_auth.csrf_header_name.clone(),
     }

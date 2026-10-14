@@ -4,7 +4,11 @@ use sqlx::SqlitePool;
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
-use crate::{auth::AuthService, config::Config, infrastructure::storage::Storage};
+use crate::{
+    auth::AuthService,
+    config::Config,
+    infrastructure::{geolocation::Geolocation, protection::Protection, storage::Storage},
+};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -16,4 +20,6 @@ pub struct AppState {
     pub cancellation: CancellationToken,
     pub player_template: Arc<String>,
     pub web_template: Arc<String>,
+    pub protection: Arc<Protection>,
+    pub geolocation: Arc<Geolocation>,
 }

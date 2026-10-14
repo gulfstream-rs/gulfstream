@@ -23,7 +23,10 @@ Gulfstream is a configurable Rust video API and responsive management applicatio
 - Configurable renditions, codecs, bitrates, GOP alignment, segment duration, fMP4 or MPEG-TS output, retention, and extra arguments
 - Public, unlisted, and private media with short-lived signed playback authorization
 - HTML5 playback, HLS assets, original-source streaming, and HTTP byte ranges
-- Persisted views, unique viewers, play starts, completed views, watch time, and bytes actually emitted
+- Embeddable player (`/embed/{id}`) with autoplay, loop, and start options, a `postMessage` API, and oEmbed discovery
+- Playback protection: per-client request, session, and concurrency limits, bandwidth pacing, a global egress cap, and hotlink blocking
+- Persisted views, qualified (monetizable) views, unique viewers, play starts, completed views, watch time, and bytes actually emitted
+- Country analytics from a CDN header or a free MaxMind DB country database (DB-IP Lite, GeoLite2, IPinfo Lite)
 - Configurable analytics retention and reporting windows
 - Responsive, accessible, dependency-free management dashboard for every operator workflow
 - Runtime-resolved OpenAPI 3.1 contract

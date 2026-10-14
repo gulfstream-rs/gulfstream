@@ -8,7 +8,7 @@ use sqlx::{Row, Sqlite, Transaction};
 use uuid::Uuid;
 
 use crate::{
-    domain::analytics::{AnalyticsPoint, AnalyticsTotals},
+    domain::analytics::{AnalyticsPoint, AnalyticsTotals, CountryStats},
     error::AppError,
     state::AppState,
 };
@@ -38,6 +38,31 @@ impl PlaybackEventKind {
     }
 }
 
+/// Where a playback session started.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PlaybackSurface {
+    Watch,
+    Embed,
+}
+
+impl PlaybackSurface {
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Watch => "watch",
+            Self::Embed => "embed",
+        }
+    }
+}
+
+/// Viewer attributes captured when a session starts.
+#[derive(Clone, Debug)]
+pub struct SessionContext<'a> {
+    pub visitor_identifier: &'a str,
+    pub country_code: &'a str,
+    pub surface: PlaybackSurface,
+}
+
 #[derive(Clone, Debug)]
 pub struct ReportingRange {
     pub from: NaiveDate,
@@ -49,18 +74,19 @@ pub async fn start_session(
     state: &AppState,
     account_id: &str,
     media_id: &str,
-    visitor_identifier: &str,
+    context: &SessionContext<'_>,
 ) -> Result<String, AppError> {
     let session_id = Uuid::new_v4().to_string();
     if !state.config.analytics.enabled {
         return Ok(session_id);
     }
-    let viewer_hash = hash_viewer(state, visitor_identifier)?;
+    let viewer_hash = hash_viewer(state, context.visitor_identifier)?;
     let timestamp = Utc::now().to_rfc3339();
     sqlx::query(
         "INSERT INTO playback_sessions \
-         (id, media_id, account_id, viewer_hash, started_at, last_event_at) \
-         VALUES (?, ?, ?, ?, ?, ?)",
+         (id, media_id, account_id, viewer_hash, started_at, last_event_at, \
+          country_code, surface) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&session_id)
     .bind(media_id)
@@ -68,6 +94,8 @@ pub async fn start_session(
     .bind(viewer_hash)
     .bind(&timestamp)
     .bind(&timestamp)
+    .bind(context.country_code)
+    .bind(context.surface.as_str())
     .execute(&state.pool)
     .await?;
     Ok(session_id)
@@ -130,8 +158,13 @@ pub async fn record_playback_event(
         false
     };
     let row = sqlx::query(
-        "SELECT account_id, media_id, viewer_hash, last_event_at, last_position_ms \
-         FROM playback_sessions WHERE id = ?",
+        "SELECT sessions.account_id, sessions.media_id, sessions.viewer_hash, \
+                sessions.last_event_at, sessions.last_position_ms, sessions.watched_ms, \
+                sessions.play_started_at, sessions.qualified_at, sessions.country_code, \
+                media.duration_ms \
+         FROM playback_sessions AS sessions \
+         JOIN media_files AS media ON media.id = sessions.media_id \
+         WHERE sessions.id = ?",
     )
     .bind(session_id)
     .fetch_one(&mut *transaction)
@@ -139,6 +172,11 @@ pub async fn record_playback_event(
     let account_id: String = row.get("account_id");
     let media_id: String = row.get("media_id");
     let viewer_hash: String = row.get("viewer_hash");
+    let country_code: String = row.get("country_code");
+    let watched_before: i64 = row.get("watched_ms");
+    let play_started = row.get::<Option<String>, _>("play_started_at").is_some();
+    let already_qualified = row.get::<Option<String>, _>("qualified_at").is_some();
+    let duration_ms: Option<i64> = row.get("duration_ms");
     let previous_event =
         chrono::DateTime::parse_from_rfc3339(&row.get::<String, _>("last_event_at"))
             .map_err(AppError::internal)?
@@ -170,6 +208,32 @@ pub async fn record_playback_event(
     .bind(session_id)
     .execute(&mut *transaction)
     .await?;
+    let newly_qualified = play_started
+        && !already_qualified
+        && watched_before.saturating_add(delta) >= qualified_threshold_ms(state, duration_ms)
+        && sqlx::query(
+            "UPDATE playback_sessions SET qualified_at = ? \
+             WHERE id = ? AND qualified_at IS NULL",
+        )
+        .bind(&timestamp_text)
+        .bind(session_id)
+        .execute(&mut *transaction)
+        .await?
+        .rows_affected()
+            == 1;
+    // Only the first qualified session per viewer, media and day counts.
+    let counted_qualified = newly_qualified
+        && sqlx::query(
+            "INSERT OR IGNORE INTO daily_qualified_viewers (day, media_id, viewer_hash) \
+             VALUES (?, ?, ?)",
+        )
+        .bind(&day)
+        .bind(&media_id)
+        .bind(&viewer_hash)
+        .execute(&mut *transaction)
+        .await?
+        .rows_affected()
+            == 1;
     if first_play {
         sqlx::query(
             "INSERT INTO analytics_events \
@@ -203,17 +267,39 @@ pub async fn record_playback_event(
             views = views + ?, \
             play_starts = play_starts + ?, \
             completed_views = completed_views + ?, \
-            watch_time_ms = watch_time_ms + ? \
+            watch_time_ms = watch_time_ms + ?, \
+            qualified_views = qualified_views + ? \
          WHERE day = ? AND media_id = ?",
     )
     .bind(bool_to_i64(first_play))
     .bind(bool_to_i64(first_play))
     .bind(bool_to_i64(first_completion))
     .bind(delta)
+    .bind(bool_to_i64(counted_qualified))
     .bind(&day)
     .bind(&media_id)
     .execute(&mut *transaction)
     .await?;
+    if first_play || delta > 0 || counted_qualified {
+        sqlx::query(
+            "INSERT INTO daily_country_stats \
+             (day, account_id, media_id, country_code, views, qualified_views, watch_time_ms) \
+             VALUES (?, ?, ?, ?, ?, ?, ?) \
+             ON CONFLICT(day, media_id, country_code) DO UPDATE SET \
+                views = views + excluded.views, \
+                qualified_views = qualified_views + excluded.qualified_views, \
+                watch_time_ms = watch_time_ms + excluded.watch_time_ms",
+        )
+        .bind(&day)
+        .bind(&account_id)
+        .bind(&media_id)
+        .bind(&country_code)
+        .bind(bool_to_i64(first_play))
+        .bind(bool_to_i64(counted_qualified))
+        .bind(delta)
+        .execute(&mut *transaction)
+        .await?;
+    }
     if first_play {
         let inserted = sqlx::query(
             "INSERT OR IGNORE INTO daily_viewers (day, account_id, media_id, viewer_hash) \
@@ -334,7 +420,8 @@ pub async fn totals(
             COALESCE(SUM(play_starts), 0) AS play_starts, \
             COALESCE(SUM(completed_views), 0) AS completed_views, \
             COALESCE(SUM(watch_time_ms), 0) AS watch_time_ms, \
-            COALESCE(SUM(bytes_served), 0) AS bytes_served \
+            COALESCE(SUM(bytes_served), 0) AS bytes_served, \
+            COALESCE(SUM(qualified_views), 0) AS qualified_views \
          FROM daily_stats \
          WHERE account_id = ? AND day BETWEEN ? AND ? \
            AND (? IS NULL OR media_id = ?)",
@@ -358,7 +445,60 @@ pub async fn totals(
         completed_views: row.get("completed_views"),
         watch_time_ms: row.get("watch_time_ms"),
         bytes_served: row.get("bytes_served"),
+        qualified_views: row.get("qualified_views"),
     })
+}
+
+/// Views, qualified views and watch time by viewer country, most viewed
+/// first. Unknown countries are reported as `ZZ`.
+pub async fn countries(
+    state: &AppState,
+    account_id: &str,
+    range: &ReportingRange,
+) -> Result<Vec<CountryStats>, AppError> {
+    let rows = sqlx::query(
+        "SELECT country_code, \
+            SUM(views) AS views, \
+            SUM(qualified_views) AS qualified_views, \
+            SUM(watch_time_ms) AS watch_time_ms \
+         FROM daily_country_stats \
+         WHERE account_id = ? AND day BETWEEN ? AND ? \
+           AND (? IS NULL OR media_id = ?) \
+         GROUP BY country_code \
+         HAVING SUM(views) > 0 OR SUM(watch_time_ms) > 0 \
+         ORDER BY views DESC, watch_time_ms DESC, country_code ASC",
+    )
+    .bind(account_id)
+    .bind(range.from.to_string())
+    .bind(range.to.to_string())
+    .bind(range.media_id.as_deref())
+    .bind(range.media_id.as_deref())
+    .fetch_all(&state.pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|row| CountryStats {
+            country_code: row.get("country_code"),
+            views: row.get("views"),
+            qualified_views: row.get("qualified_views"),
+            watch_time_ms: row.get("watch_time_ms"),
+        })
+        .collect())
+}
+
+/// Watch time a session needs before its view qualifies.
+fn qualified_threshold_ms(state: &AppState, duration_ms: Option<i64>) -> i64 {
+    let analytics = &state.config.analytics;
+    let configured =
+        i64::try_from(analytics.qualified_view_seconds.saturating_mul(1000)).unwrap_or(i64::MAX);
+    match duration_ms.filter(|duration| *duration > 0) {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+        Some(duration) => {
+            let fraction = (duration as f64 * analytics.qualified_view_minimum_fraction) as i64;
+            configured.min(fraction.max(1))
+        }
+        None => configured,
+    }
 }
 
 pub async fn time_series(
@@ -375,7 +515,8 @@ pub async fn time_series(
             SUM(stats.play_starts) AS play_starts, \
             SUM(stats.completed_views) AS completed_views, \
             SUM(stats.watch_time_ms) AS watch_time_ms, \
-            SUM(stats.bytes_served) AS bytes_served \
+            SUM(stats.bytes_served) AS bytes_served, \
+            SUM(stats.qualified_views) AS qualified_views \
          FROM daily_stats AS stats \
          WHERE stats.account_id = ? AND stats.day BETWEEN ? AND ? \
            AND (? IS NULL OR stats.media_id = ?) \
@@ -401,6 +542,7 @@ pub async fn time_series(
             completed_views: row.get("completed_views"),
             watch_time_ms: row.get("watch_time_ms"),
             bytes_served: row.get("bytes_served"),
+            qualified_views: row.get("qualified_views"),
         })
         .collect();
     Ok(fill_missing_points(range, points))
@@ -423,6 +565,7 @@ fn fill_missing_points(range: &ReportingRange, points: Vec<AnalyticsPoint>) -> V
                 completed_views: 0,
                 watch_time_ms: 0,
                 bytes_served: 0,
+                qualified_views: 0,
             })
         })
         .collect()
@@ -476,6 +619,7 @@ mod tests {
                 completed_views: 1,
                 watch_time_ms: 1000,
                 bytes_served: 2000,
+                qualified_views: 1,
             }],
         );
 

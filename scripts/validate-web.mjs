@@ -60,8 +60,53 @@ for (const marker of [
   '{{RUNTIME_CONFIG_JSON}}',
   'id="app"',
   'id="confirm-dialog"',
+  'id="toast-region"',
+  'data-theme-toggle',
 ]) {
   if (!shell.includes(marker)) fail(`web/shell.html is missing ${marker}`);
+}
+
+// Every icon referenced from JavaScript or the shell must exist in the sprite.
+const sprite = new Set([...shell.matchAll(/<symbol id="i-([a-z-]+)"/g)].map((match) => match[1]));
+const iconReferences = [...shell.matchAll(/href="#i-([a-z-]+)"/g)].map((match) => [join('web', 'shell.html'), match[1]]);
+for (const script of scripts) {
+  const source = await readFile(script, 'utf8');
+  for (const match of source.matchAll(/(?:icon\(|iconName:\s*)'([a-z-]+)'/g)) iconReferences.push([script, match[1]]);
+  for (const match of source.matchAll(/\['([a-z-]+)', config\.routes\./g)) iconReferences.push([script, match[1]]);
+}
+for (const [file, name] of iconReferences) {
+  if (!sprite.has(name)) fail(`${file} references missing icon "${name}"`);
+}
+
+// Player template: required markers (see src/runtime.rs) and inline script syntax.
+const player = await readFile(join(root, 'templates', 'player.html'), 'utf8');
+const playerMarkers = {
+  '{{TITLE}}': 'Title',
+  '{{DESCRIPTION}}': 'Description',
+  '{{HLS_SCRIPT}}': '',
+  '{{STREAM_URL_JSON}}': '"/stream/id/master.m3u8"',
+  '{{EVENT_URL_JSON}}': '"/api/v1/playback/session/events"',
+  '{{SOURCE_MODE_JSON}}': '"hls"',
+  '{{HEARTBEAT_MILLISECONDS}}': '10000',
+  '{{FALLBACK_URL_JSON}}': 'null',
+  '{{SITE_NAME}}': 'Site',
+  '{{PLAYER_OPTIONS_JSON}}': '{"surface":"embed","autoplay":false,"muted":false,"loop":false,"start_seconds":0,"watch_url":null,"embed_url":null,"title":"Title","site_name":"Site"}',
+  '{{HEAD_LINKS}}': '',
+};
+for (const marker of [...Object.keys(playerMarkers), '<video']) {
+  if (!player.includes(marker)) fail(`templates/player.html is missing ${marker}`);
+}
+let renderedPlayer = player;
+for (const [marker, value] of Object.entries(playerMarkers)) {
+  renderedPlayer = renderedPlayer.replaceAll(marker, value);
+}
+const leftover = renderedPlayer.match(/\{\{[A-Z_]+\}\}/);
+if (leftover) fail(`templates/player.html uses unknown marker ${leftover[0]}`);
+const inlineScripts = [...renderedPlayer.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((match) => match[1]);
+if (inlineScripts.length === 0) fail('templates/player.html has no inline player script');
+for (const [index, source] of inlineScripts.entries()) {
+  const result = spawnSync(process.execPath, ['--check', '--input-type=commonjs', '-'], { input: source, encoding: 'utf8' });
+  if (result.status !== 0) fail(`templates/player.html inline script #${index + 1}\n${result.stderr}`);
 }
 
 const application = await readFile(join(assetsRoot, 'app.js'), 'utf8');
@@ -70,5 +115,5 @@ for (const page of ['register', 'login', 'dashboard', 'upload', 'media', 'media_
 }
 
 if (!process.exitCode) {
-  console.log(`validated ${scripts.length} JavaScript modules, ${styles.length} stylesheets, and the HTML shell`);
+  console.log(`validated ${scripts.length} JavaScript modules, ${styles.length} stylesheets, ${sprite.size} icons, the HTML shell, and the player template`);
 }

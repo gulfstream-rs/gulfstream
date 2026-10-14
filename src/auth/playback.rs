@@ -65,4 +65,33 @@ impl AuthService {
         }
         Ok(())
     }
+
+    /// Signs a playback session identifier so analytics events can be
+    /// authorized without cookies (third-party embeds often cannot use them).
+    pub fn sign_playback_session(&self, session_id: &str) -> Result<String, AppError> {
+        let mut mac =
+            <HmacSha256 as KeyInit>::new_from_slice(self.security.playback_signing_key.as_bytes())
+                .map_err(AppError::internal)?;
+        mac.update(SESSION_SIGNATURE_CONTEXT);
+        mac.update(session_id.as_bytes());
+        Ok(URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes()))
+    }
+
+    /// Verifies a signature produced by [`Self::sign_playback_session`].
+    pub fn verify_playback_session(&self, session_id: &str, signature: &str) -> bool {
+        let Ok(supplied) = URL_SAFE_NO_PAD.decode(signature) else {
+            return false;
+        };
+        let Ok(mut mac) =
+            <HmacSha256 as KeyInit>::new_from_slice(self.security.playback_signing_key.as_bytes())
+        else {
+            return false;
+        };
+        mac.update(SESSION_SIGNATURE_CONTEXT);
+        mac.update(session_id.as_bytes());
+        mac.verify_slice(&supplied).is_ok()
+    }
 }
+
+/// Domain separation from playback tokens signed with the same key.
+const SESSION_SIGNATURE_CONTEXT: &[u8] = b"gulfstream:playback-session:v1\0";

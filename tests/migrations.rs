@@ -29,6 +29,8 @@ async fn migrations_create_the_expected_core_tables() -> anyhow::Result<()> {
         "analytics_events",
         "daily_viewers",
         "daily_stats",
+        "daily_qualified_viewers",
+        "daily_country_stats",
     ] {
         assert!(names.contains(expected), "missing table {expected}");
     }

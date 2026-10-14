@@ -109,7 +109,12 @@ CREATE TABLE playback_sessions (
     completed_at TEXT,
     last_position_ms INTEGER NOT NULL DEFAULT 0 CHECK (last_position_ms >= 0),
     watched_ms INTEGER NOT NULL DEFAULT 0 CHECK (watched_ms >= 0),
-    bytes_served INTEGER NOT NULL DEFAULT 0 CHECK (bytes_served >= 0)
+    bytes_served INTEGER NOT NULL DEFAULT 0 CHECK (bytes_served >= 0),
+    -- ISO 3166-1 alpha-2 code; 'ZZ' when unknown. IP addresses are never stored.
+    country_code TEXT NOT NULL DEFAULT 'ZZ',
+    surface TEXT NOT NULL DEFAULT 'watch' CHECK (surface IN ('watch', 'embed')),
+    -- Set once the session reaches the qualified (monetizable) watch threshold.
+    qualified_at TEXT
 );
 CREATE INDEX playback_sessions_media_started_idx ON playback_sessions(media_id, started_at DESC);
 
@@ -146,6 +151,28 @@ CREATE TABLE daily_stats (
     completed_views INTEGER NOT NULL DEFAULT 0 CHECK (completed_views >= 0),
     watch_time_ms INTEGER NOT NULL DEFAULT 0 CHECK (watch_time_ms >= 0),
     bytes_served INTEGER NOT NULL DEFAULT 0 CHECK (bytes_served >= 0),
+    qualified_views INTEGER NOT NULL DEFAULT 0 CHECK (qualified_views >= 0),
     PRIMARY KEY(day, media_id)
 );
 CREATE INDEX daily_stats_account_day_idx ON daily_stats(account_id, day);
+
+-- At most one qualified view per viewer, media and day: refreshing the page
+-- does not multiply monetizable views.
+CREATE TABLE daily_qualified_viewers (
+    day TEXT NOT NULL,
+    media_id TEXT NOT NULL REFERENCES media_files(id) ON DELETE CASCADE,
+    viewer_hash TEXT NOT NULL,
+    PRIMARY KEY(day, media_id, viewer_hash)
+);
+
+CREATE TABLE daily_country_stats (
+    day TEXT NOT NULL,
+    account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    media_id TEXT NOT NULL REFERENCES media_files(id) ON DELETE CASCADE,
+    country_code TEXT NOT NULL CHECK (length(country_code) = 2),
+    views INTEGER NOT NULL DEFAULT 0 CHECK (views >= 0),
+    qualified_views INTEGER NOT NULL DEFAULT 0 CHECK (qualified_views >= 0),
+    watch_time_ms INTEGER NOT NULL DEFAULT 0 CHECK (watch_time_ms >= 0),
+    PRIMARY KEY(day, media_id, country_code)
+);
+CREATE INDEX daily_country_stats_account_day_idx ON daily_country_stats(account_id, day);

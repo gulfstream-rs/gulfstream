@@ -24,6 +24,12 @@ pub struct Config {
     pub analytics: AnalyticsConfig,
     pub player: PlayerConfig,
     pub observability: ObservabilityConfig,
+    /// Abuse and bandwidth protection for playback routes.
+    pub protection: ProtectionConfig,
+    /// Third-party embedding of the player (`routes.embed`).
+    pub embed: EmbedConfig,
+    /// Country attribution for playback analytics.
+    pub geolocation: GeolocationConfig,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -48,6 +54,8 @@ pub struct RoutesConfig {
     pub health_live: String,
     pub health_ready: String,
     pub openapi: String,
+    pub embed: String,
+    pub oembed: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -336,6 +344,11 @@ pub struct AnalyticsConfig {
     pub playback_session_retention_days: u64,
     pub maintenance_interval_seconds: u64,
     pub record_byte_events: bool,
+    /// Server-measured watch time after which a view counts as qualified
+    /// (the unit used for monetization). Shorter videos qualify after
+    /// `qualified_view_minimum_fraction` of their duration instead.
+    pub qualified_view_seconds: u64,
+    pub qualified_view_minimum_fraction: f64,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize)]
@@ -369,4 +382,86 @@ pub struct PlayerConfig {
 pub struct ObservabilityConfig {
     pub log_filter: String,
     pub json_logs: bool,
+}
+
+/// Playback abuse protection. Limits apply per client address; IPv6 clients
+/// are grouped by their /64 prefix. A value of `0` disables a limit.
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProtectionConfig {
+    /// Header carrying the client address when Gulfstream runs behind a
+    /// trusted reverse proxy or CDN (for example `x-forwarded-for` or
+    /// `cf-connecting-ip`). Leave unset when clients connect directly:
+    /// otherwise clients can spoof their address.
+    pub client_ip_header: Option<String>,
+    /// Sustained stream requests (playlists, segments, source ranges) per
+    /// second and client, and the burst allowed above that rate.
+    pub stream_requests_per_second: u32,
+    pub stream_request_burst: u32,
+    /// Watch/embed page loads (new playback sessions) per minute and client.
+    pub sessions_per_minute: u32,
+    /// Simultaneous open stream responses per client.
+    pub max_concurrent_streams_per_client: u32,
+    /// Per-response pacing of HLS segments after `segment_burst_bytes`.
+    pub segment_bytes_per_second: u64,
+    pub segment_burst_bytes: u64,
+    /// Per-response pacing of the original file after `source_burst_bytes`.
+    pub source_bytes_per_second: u64,
+    pub source_burst_bytes: u64,
+    /// Total egress cap shared by every stream response.
+    pub global_bytes_per_second: u64,
+    /// Reject browser media requests initiated by other sites
+    /// (`Sec-Fetch-Site: cross-site`), which stops hotlinking of streams
+    /// outside the official player and embed.
+    pub block_cross_site_requests: bool,
+    /// Serve the original upload to viewers when HLS renditions exist.
+    /// Disable to stop full-quality source downloads; owners can still
+    /// fetch it with their API credentials.
+    pub expose_original_with_hls: bool,
+    /// Upper bound of tracked clients before idle entries are pruned.
+    pub maximum_tracked_clients: usize,
+}
+
+/// Recommended values, matching `config/gulfstream.example.toml`.
+impl Default for ProtectionConfig {
+    fn default() -> Self {
+        Self {
+            client_ip_header: None,
+            stream_requests_per_second: 30,
+            stream_request_burst: 300,
+            sessions_per_minute: 60,
+            max_concurrent_streams_per_client: 16,
+            segment_bytes_per_second: 0,
+            segment_burst_bytes: 0,
+            source_bytes_per_second: 2_500_000,
+            source_burst_bytes: 16_000_000,
+            global_bytes_per_second: 0,
+            block_cross_site_requests: true,
+            expose_original_with_hls: false,
+            maximum_tracked_clients: 100_000,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EmbedConfig {
+    pub enabled: bool,
+    /// Origins allowed to frame the embed player (`frame-ancestors`), for
+    /// example `["https://blog.example.com"]`. `["*"]` allows any site.
+    pub allowed_origins: Vec<String>,
+    /// Default iframe size offered by oEmbed and the embed-code builder.
+    pub default_width: u32,
+    pub default_height: u32,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct GeolocationConfig {
+    /// MaxMind DB (`.mmdb`) country database: DB-IP IP-to-Country Lite,
+    /// MaxMind GeoLite2 Country or IPinfo Lite.
+    pub database_path: Option<PathBuf>,
+    /// Trusted CDN header with an ISO 3166-1 alpha-2 country code (for
+    /// example `cf-ipcountry`). Takes precedence over the database.
+    pub country_header: Option<String>,
 }

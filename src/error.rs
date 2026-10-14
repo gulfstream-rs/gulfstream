@@ -26,6 +26,8 @@ pub enum AppError {
     RemoteRejected(String),
     #[error("media is not ready for playback")]
     MediaNotReady,
+    #[error("too many requests; retry in {retry_after_seconds} seconds")]
+    TooManyRequests { retry_after_seconds: u64 },
     #[error(transparent)]
     Database(#[from] sqlx::Error),
     #[error(transparent)]
@@ -68,6 +70,7 @@ impl AppError {
                 (StatusCode::RANGE_NOT_SATISFIABLE, "range_not_satisfiable")
             }
             Self::MediaNotReady => (StatusCode::CONFLICT, "media_not_ready"),
+            Self::TooManyRequests { .. } => (StatusCode::TOO_MANY_REQUESTS, "rate_limited"),
             Self::Database(_) | Self::Io(_) | Self::Http(_) | Self::Internal(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal_error")
             }
@@ -78,8 +81,17 @@ impl AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, code) = self.status_and_code();
+        let retry_after = match &self {
+            Self::TooManyRequests {
+                retry_after_seconds,
+            } => Some(*retry_after_seconds),
+            _ => None,
+        };
         if status.is_server_error() {
             tracing::error!(error = ?self, "request failed");
+        } else if retry_after.is_some() {
+            // Rate-limit rejections can be very frequent under abuse.
+            tracing::debug!(error = %self, "request rate limited");
         } else {
             tracing::warn!(error = %self, "request rejected");
         }
@@ -88,12 +100,18 @@ impl IntoResponse for AppError {
         } else {
             self.to_string()
         };
-        (
+        let mut response = (
             status,
             Json(ErrorResponse {
                 error: ErrorDetail { code, message },
             }),
         )
-            .into_response()
+            .into_response();
+        if let Some(seconds) = retry_after {
+            response
+                .headers_mut()
+                .insert(axum::http::header::RETRY_AFTER, seconds.max(1).into());
+        }
+        response
     }
 }

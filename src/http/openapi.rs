@@ -18,6 +18,8 @@ pub async fn serve(
         .replace("{{API_ROUTE}}", &state.config.routes.api)
         .replace("{{WATCH_ROUTE}}", &state.config.routes.watch)
         .replace("{{STREAM_ROUTE}}", &state.config.routes.stream)
+        .replace("{{EMBED_ROUTE}}", &state.config.routes.embed)
+        .replace("{{OEMBED_ROUTE}}", &state.config.routes.oembed)
         .replace("{{HEALTH_LIVE_ROUTE}}", &state.config.routes.health_live)
         .replace("{{HEALTH_READY_ROUTE}}", &state.config.routes.health_ready)
         .replace("{{OPENAPI_ROUTE}}", &state.config.routes.openapi)
