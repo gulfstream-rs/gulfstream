@@ -2,6 +2,10 @@
 
 All notable changes to Gulfstream are documented here. Releases follow Semantic Versioning.
 
+## 5.0.1 — 2026-10-19
+
+- Updated `rustls` to 0.23.46 (RUSTSEC-2026-0346, RUSTSEC-2026-0347, RUSTSEC-2026-0348, RUSTSEC-2026-0349).
+
 ## 5.0.0 — 2026-10-14
 
 Breaking changes (no in-place upgrade from 4.x):
